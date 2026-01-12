@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Tracks the number of health meter buttons currently visible
+ * Tracks the number of run meter buttons currently visible
  */
 let activeButtonCount = 0;
 
@@ -13,7 +13,7 @@ let activeButtonCount = 0;
 let pollingInterval: NodeJS.Timeout | null = null;
 
 /**
- * Map to store health meter button instances by context
+ * Map to store run meter button instances by context
  */
 const activeButtons = new Map<string, any>();
 
@@ -23,15 +23,15 @@ const activeButtons = new Map<string, any>();
 let cachedServerUrl = "http://localhost:8085/state";
 
 /**
- * Health Meter Button action
+ * Run Meter Button action
  */
-@action({ UUID: "com.catagris.runelite.healthmeter" })
-export class HealthMeter extends SingletonAction<HealthMeterSettings> {
+@action({ UUID: "com.catagris.runelite.runmeter" })
+export class RunMeter extends SingletonAction<RunMeterSettings> {
 	/**
 	 * Called when the action becomes visible on the Stream Deck
 	 */
-	override async onWillAppear(ev: WillAppearEvent<HealthMeterSettings>): Promise<void> {
-		console.log("[HealthMeter] onWillAppear called");
+	override async onWillAppear(ev: WillAppearEvent<RunMeterSettings>): Promise<void> {
+		console.log("[RunMeter] onWillAppear called");
 		// Set default settings if not present
 		const settings = ev.payload.settings;
 		if (!settings.serverUrl) {
@@ -56,21 +56,21 @@ export class HealthMeter extends SingletonAction<HealthMeterSettings> {
 
 		// Increment button count
 		activeButtonCount++;
-		console.log(`[HealthMeter] Button added. Total buttons: ${activeButtonCount}`);
+		console.log(`[RunMeter] Button added. Total buttons: ${activeButtonCount}`);
 
 		// Start polling if this is the first button
 		if (isFirstButton) {
 			startPolling(settings.pollInterval);
 		} else {
 			// If polling is already running, immediately update this button
-			updateHealthMeters();
+			updateRunMeters();
 		}
 	}
 
 	/**
 	 * Called when the action is removed from the Stream Deck
 	 */
-	override async onWillDisappear(ev: WillDisappearEvent<HealthMeterSettings>): Promise<void> {
+	override async onWillDisappear(ev: WillDisappearEvent<RunMeterSettings>): Promise<void> {
 		// Remove the action instance
 		activeButtons.delete(ev.action.id);
 
@@ -89,7 +89,7 @@ export class HealthMeter extends SingletonAction<HealthMeterSettings> {
 	/**
 	 * Called when settings are updated via property inspector
 	 */
-	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<HealthMeterSettings>): Promise<void> {
+	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<RunMeterSettings>): Promise<void> {
 		const settings = ev.payload.settings;
 
 		// Update cached server URL if changed
@@ -101,7 +101,7 @@ export class HealthMeter extends SingletonAction<HealthMeterSettings> {
 		cachedSettings.set(ev.action.id, settings);
 
 		// Immediately update to reflect new settings
-		updateHealthMeters();
+		updateRunMeters();
 
 		// Update poll interval if changed
 		if (settings.pollInterval && pollingInterval) {
@@ -116,17 +116,17 @@ export class HealthMeter extends SingletonAction<HealthMeterSettings> {
  */
 function startPolling(interval: number): void {
 	if (pollingInterval) {
-		console.log("[HealthMeter] Polling already running");
+		console.log("[RunMeter] Polling already running");
 		return; // Already polling
 	}
 
-	console.log(`[HealthMeter] Starting polling with ${interval}ms interval`);
+	console.log(`[RunMeter] Starting polling with ${interval}ms interval`);
 	pollingInterval = setInterval(() => {
-		updateHealthMeters();
+		updateRunMeters();
 	}, interval);
 
 	// Immediately update on start
-	updateHealthMeters();
+	updateRunMeters();
 }
 
 /**
@@ -142,14 +142,14 @@ function stopPolling(): void {
 /**
  * Cached settings to avoid repeated getSettings() calls
  */
-const cachedSettings = new Map<string, HealthMeterSettings>();
+const cachedSettings = new Map<string, RunMeterSettings>();
 
 /**
- * Updates all health meter buttons by fetching the current state from RuneLite
+ * Updates all run meter buttons by fetching the current state from RuneLite
  */
-async function updateHealthMeters(): Promise<void> {
+async function updateRunMeters(): Promise<void> {
 	if (activeButtons.size === 0) {
-		console.log("[HealthMeter] No buttons to update");
+		console.log("[RunMeter] No buttons to update");
 		return;
 	}
 
@@ -157,7 +157,7 @@ async function updateHealthMeters(): Promise<void> {
 	const timeoutId = setTimeout(() => controller.abort(), 1000); // 1 second timeout
 
 	try {
-		console.log(`[HealthMeter] Fetching state from ${cachedServerUrl}`);
+		console.log(`[RunMeter] Fetching state from ${cachedServerUrl}`);
 		const response = await fetch(cachedServerUrl, { signal: controller.signal });
 		clearTimeout(timeoutId);
 
@@ -166,111 +166,95 @@ async function updateHealthMeters(): Promise<void> {
 		}
 
 		const data = await response.json() as RuneLiteState;
-		console.log(`[HealthMeter] Received data:`, data);
+		console.log(`[RunMeter] Received data:`, data);
 
-		// Update all health meter buttons in parallel
+		// Update all run meter buttons in parallel
 		await Promise.all(
 			Array.from(activeButtons.entries()).map(async ([id, action]) => {
 				try {
-					const image = createHealthMeterImage(data);
+					const image = createRunMeterImage(data);
 					await action.setImage(image);
-					console.log(`[HealthMeter] Updated button ${id}`);
+					console.log(`[RunMeter] Updated button ${id}`);
 				} catch (error) {
-					console.log(`[HealthMeter] Error updating button ${id}:`, error);
+					console.log(`[RunMeter] Error updating button ${id}:`, error);
 				}
 			})
 		);
 
 	} catch (error) {
 		clearTimeout(timeoutId);
-		console.log(`[HealthMeter] Error fetching state:`, error);
+		console.log(`[RunMeter] Error fetching state:`, error);
 	}
 }
 
 /**
- * Cached overlay image as base64 data URI
+ * Cached overlay images as base64 data URI
  */
-let cachedOverlayImage: string | null = null;
+let cachedEnabledOverlay: string | null = null;
+let cachedDisabledOverlay: string | null = null;
 
 /**
  * Loads the overlay PNG image and caches it as base64
  */
-function loadOverlayImage(): string {
-	if (cachedOverlayImage) {
-		return cachedOverlayImage;
+function loadOverlayImage(enabled: boolean): string {
+	const cached = enabled ? cachedEnabledOverlay : cachedDisabledOverlay;
+	if (cached) {
+		return cached;
 	}
 
 	try {
-		// process.cwd() gives the plugin directory when running
-		const imgPath = path.join(process.cwd(), 'imgs', 'actions', 'healthmeter', 'Hitpoints_orb.png');
-		console.log('[HealthMeter] Loading overlay image from:', imgPath);
+		const filename = enabled ? 'Run_energy_orb_enabled.png' : 'Run_energy_orb_disabled.png';
+		const imgPath = path.join(process.cwd(), 'imgs', 'actions', 'run', filename);
+		console.log('[RunMeter] Loading overlay image from:', imgPath);
 		const imageBuffer = fs.readFileSync(imgPath);
-		cachedOverlayImage = `data:image/png;base64,${imageBuffer.toString('base64')}`;
-		console.log('[HealthMeter] Overlay image loaded, size:', imageBuffer.length);
-		return cachedOverlayImage;
+		const dataUri = `data:image/png;base64,${imageBuffer.toString('base64')}`;
+		console.log('[RunMeter] Overlay image loaded, size:', imageBuffer.length);
+
+		if (enabled) {
+			cachedEnabledOverlay = dataUri;
+		} else {
+			cachedDisabledOverlay = dataUri;
+		}
+
+		return dataUri;
 	} catch (error) {
-		console.log('[HealthMeter] Error loading overlay image:', error);
+		console.log('[RunMeter] Error loading overlay image:', error);
 		return '';
 	}
 }
 
 /**
- * Status color constants
+ * Run energy fill colors
  */
-const STATUS_COLORS = {
-	normal: '#B00905',    // Red for normal health
-	poisoned: '#19DA00',  // Bright green for poison
-	venomed: '#24573D',   // Dark green-blue for venom
-	diseased: '#C5BA73',  // Dark Khaki/yellow for disease
+const RUN_COLORS = {
+	enabled: '#CEA801',   // Golden Rod when run is enabled
+	disabled: '#ACADA3',  // Dark gray when run is disabled
 };
 
 /**
- * Determines the fill color(s) based on status effects
- * Returns either a single color string or an object with left/right colors for split display
+ * Creates an image with the run meter visualization
+ * Layers: background -> colored fill -> orbital gradient -> PNG overlay -> text
  */
-function getHealthFillColor(data: RuneLiteState): string | { left: string; right: string } {
-	const status = data.stats?.hp?.status;
+function createRunMeterImage(data: RuneLiteState): string {
+	// Get run energy data (0-10000)
+	const runEnergy = data.stats?.runEnergy || 0;
+	const runEnabled = data.stats?.runEnabled || false;
 
-	// Handle combined statuses (split colors)
-	if (status === 'poisoned_diseased') {
-		return { left: STATUS_COLORS.poisoned, right: STATUS_COLORS.diseased };
-	}
-	if (status === 'venomed_diseased') {
-		return { left: STATUS_COLORS.venomed, right: STATUS_COLORS.diseased };
-	}
+	// Calculate percentage (runEnergy is 0-10000)
+	const energyPercent = runEnergy / 10000;
 
-	// Single status colors
-	switch (status) {
-		case 'poisoned':
-			return STATUS_COLORS.poisoned;
-		case 'venomed':
-			return STATUS_COLORS.venomed;
-		case 'diseased':
-			return STATUS_COLORS.diseased;
-		default:
-			return STATUS_COLORS.normal;
-	}
-}
-
-/**
- * Creates an image with the health meter visualization
- * Layers: background -> colored fill -> PNG overlay (transparent areas show fill) -> text
- */
-function createHealthMeterImage(data: RuneLiteState): string {
-	// Get health data from stats.hp
-	const currentHealth = data.stats?.hp?.current || 0;
-	const maxHealth = data.stats?.hp?.max || 100;
-	const healthPercent = maxHealth > 0 ? currentHealth / maxHealth : 0;
+	// Display value (0-100)
+	const displayValue = Math.floor(runEnergy / 100);
 
 	// Calculate fill height (from bottom)
-	const fillHeight = Math.round(144 * healthPercent);
+	const fillHeight = Math.round(144 * energyPercent);
 	const fillY = 144 - fillHeight;
 
-	// Get fill color based on status effect
-	const fillColor = getHealthFillColor(data);
+	// Get fill color based on run enabled state
+	const fillColor = runEnabled ? RUN_COLORS.enabled : RUN_COLORS.disabled;
 
-	// Load overlay PNG
-	const overlayImageData = loadOverlayImage();
+	// Load appropriate overlay PNG based on run state
+	const overlayImageData = loadOverlayImage(runEnabled);
 
 	// Create SVG - layering to match OSRS orb appearance
 	let svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">`;
@@ -286,30 +270,21 @@ function createHealthMeterImage(data: RuneLiteState): string {
 	svg += `</radialGradient>`;
 	svg += `</defs>`;
 
-	// Layer 1: Colored health fill (from bottom up based on health %)
+	// Layer 1: Black background + colored energy fill (from bottom up based on energy %)
 	svg += `<rect width="144" height="144" fill="#000000"/>`;
-
-	// Handle split colors for combined statuses (left/right split)
-	if (typeof fillColor === 'object') {
-		// Left half
-		svg += `<rect x="0" y="${fillY}" width="72" height="${fillHeight}" fill="${fillColor.left}"/>`;
-		// Right half
-		svg += `<rect x="72" y="${fillY}" width="72" height="${fillHeight}" fill="${fillColor.right}"/>`;
-	} else {
-		svg += `<rect x="0" y="${fillY}" width="144" height="${fillHeight}" fill="${fillColor}"/>`;
-	}
+	svg += `<rect x="0" y="${fillY}" width="144" height="${fillHeight}" fill="${fillColor}"/>`;
 
 	// Layer 2: Orbital gradient overlay for 3D spherical effect
 	svg += `<circle cx="72" cy="72" r="72" fill="url(#orbGradient)"/>`;
 
-	// Layer 3: PNG overlay on top (the orb frame/border with heart cutout)
+	// Layer 3: PNG overlay on top (the orb frame/border with foot icon)
 	if (overlayImageData) {
 		svg += `<image href="${overlayImageData}" x="0" y="0" width="144" height="144"/>`;
 	}
 
-	// Layer 4: Health text (white with black stroke for readability)
-	svg += `<text x="72" y="80" font-family="Arial" font-size="36" font-weight="bold" text-anchor="middle" dominant-baseline="middle" stroke="#000000" stroke-width="3" fill="none">${currentHealth}</text>`;
-	svg += `<text x="72" y="80" font-family="Arial" font-size="36" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="#FFFFFF">${currentHealth}</text>`;
+	// Layer 4: Run energy text (white with black stroke for readability)
+	svg += `<text x="72" y="80" font-family="Arial" font-size="36" font-weight="bold" text-anchor="middle" dominant-baseline="middle" stroke="#000000" stroke-width="3" fill="none">${displayValue}</text>`;
+	svg += `<text x="72" y="80" font-family="Arial" font-size="36" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="#FFFFFF">${displayValue}</text>`;
 
 	svg += `</svg>`;
 
@@ -319,9 +294,9 @@ function createHealthMeterImage(data: RuneLiteState): string {
 }
 
 /**
- * Settings for health meter buttons
+ * Settings for run meter buttons
  */
-type HealthMeterSettings = {
+type RunMeterSettings = {
 	serverUrl?: string;
 	pollInterval?: number;
 };

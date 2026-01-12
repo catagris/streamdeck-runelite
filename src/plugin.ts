@@ -2,6 +2,7 @@ import streamDeck from "@elgato/streamdeck";
 
 import { TabButton } from "./actions/tab-button";
 import { HealthMeter } from "./actions/health-meter";
+import { RunMeter } from "./actions/run-meter";
 
 console.log("[Plugin] Starting RuneLite Stream Deck Plugin");
 
@@ -15,6 +16,8 @@ try {
 	console.log("[Plugin] TabButton registered");
 	streamDeck.actions.registerAction(new HealthMeter());
 	console.log("[Plugin] HealthMeter registered");
+	streamDeck.actions.registerAction(new RunMeter());
+	console.log("[Plugin] RunMeter registered");
 } catch (error) {
 	console.error("[Plugin] Error registering actions:", error);
 }

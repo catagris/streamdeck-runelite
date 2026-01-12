@@ -36,6 +36,21 @@
 					"Name": "Default"
 				}
 			]
+		},
+		{
+			"Name": "Run Meter",
+			"UUID": "com.catagris.runelite.runmeter",
+			"Icon": "imgs/actions/run/icon",
+			"Tooltip": "Displays current run energy with visual meter - changes appearance when run is toggled",
+			"PropertyInspectorPath": "ui/runmeter.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Name": "Default"
+				}
+			]
 		}
 	],
 	"Category": "runelite",

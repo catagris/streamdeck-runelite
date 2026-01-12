@@ -2,7 +2,7 @@
 <html>
 <head>
 	<meta charset="utf-8" />
-	<title>com.catagris.runelite.healthmeter PI</title>
+	<title>com.catagris.runelite.runmeter PI</title>
 	<style>
 		body {
 			margin: 10px;
@@ -27,10 +27,6 @@
 			color: #D8D8D8;
 			border-radius: 3px;
 		}
-		input[type="file"] {
-			width: 100%;
-			color: #D8D8D8;
-		}
 		.help-text {
 			font-size: 8pt;
 			color: #9D9D9D;
@@ -54,9 +50,10 @@
 	<div class="sdpi-item">
 		<div class="help-text">
 			<strong>How it works:</strong><br>
-			1. Displays the OSRS hitpoints orb with health fill<br>
-			2. Fill color changes based on status (red=normal, green=poisoned, dark green=venomed, yellow=diseased)<br>
-			3. Current health value is displayed as white text
+			1. Displays the OSRS run energy orb with energy fill<br>
+			2. Fill color changes based on run state (golden=enabled, gray=disabled)<br>
+			3. Orb icon changes when run is toggled on/off<br>
+			4. Current run energy (0-100) is displayed as white text
 		</div>
 	</div>
 
