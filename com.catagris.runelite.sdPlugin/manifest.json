@@ -1,0 +1,65 @@
+{
+	"Name": "runelite",
+	"Version": "0.1.0.0",
+	"Author": "Catagris",
+	"Actions": [
+		{
+			"Name": "Tab Button",
+			"UUID": "com.catagris.runelite.tab",
+			"Icon": "imgs/actions/tab/icon",
+			"Tooltip": "Configurable tab indicator - highlights when specified tab is active",
+			"PropertyInspectorPath": "ui/tab.html",
+			"DisableCaching": true,
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Name": "Inactive"
+				},
+				{
+					"Name": "Active"
+				}
+			]
+		},
+		{
+			"Name": "Health Meter",
+			"UUID": "com.catagris.runelite.healthmeter",
+			"Icon": "imgs/actions/tab/icon",
+			"Tooltip": "Displays current health with visual meter and number",
+			"PropertyInspectorPath": "ui/healthmeter.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Name": "Default"
+				}
+			]
+		}
+	],
+	"Category": "runelite",
+	"CategoryIcon": "imgs/plugin/category-icon",
+	"CodePath": "bin/plugin.js",
+	"Description": "Interact with Runelite through the streamdeck plugin",
+	"Icon": "imgs/plugin/marketplace",
+	"SDKVersion": 3,
+	"Software": {
+		"MinimumVersion": "6.9"
+	},
+	"OS": [
+		{
+			"Platform": "mac",
+			"MinimumVersion": "12"
+		},
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		}
+	],
+	"Nodejs": {
+		"Version": "20",
+		"Debug": "enabled"
+	},
+	"UUID": "com.catagris.runelite"
+}

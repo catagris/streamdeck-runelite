@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>com.catagris.runelite.healthmeter PI</title>
+	<style>
+		body {
+			margin: 10px;
+			font-family: Arial, sans-serif;
+			color: #D8D8D8;
+			background-color: #2D2D2D;
+		}
+		.sdpi-item {
+			margin-bottom: 12px;
+		}
+		.sdpi-item-label {
+			display: block;
+			margin-bottom: 4px;
+			font-size: 9pt;
+			font-weight: bold;
+		}
+		input[type="text"], input[type="number"] {
+			width: 100%;
+			padding: 4px;
+			background-color: #3D3D3D;
+			border: 1px solid #5D5D5D;
+			color: #D8D8D8;
+			border-radius: 3px;
+		}
+		input[type="file"] {
+			width: 100%;
+			color: #D8D8D8;
+		}
+		.help-text {
+			font-size: 8pt;
+			color: #9D9D9D;
+			margin-top: 2px;
+		}
+	</style>
+</head>
+<body>
+	<div class="sdpi-item">
+		<div class="sdpi-item-label">Server URL</div>
+		<input type="text" id="serverUrl" value="http://localhost:8085/state" placeholder="http://localhost:8085/state">
+		<div class="help-text">RuneLite HTTP server endpoint</div>
+	</div>
+
+	<div class="sdpi-item">
+		<div class="sdpi-item-label">Poll Interval (ms)</div>
+		<input type="number" id="pollInterval" value="200" min="50" max="5000" step="50">
+		<div class="help-text">How often to update (200ms recommended)</div>
+	</div>
+
+	<div class="sdpi-item">
+		<div class="sdpi-item-label">Mask Image (Base64)</div>
+		<input type="text" id="maskImage" placeholder="data:image/png;base64,...">
+		<div class="help-text">Optional: Base64 image to overlay on the health meter</div>
+	</div>
+
+	<div class="sdpi-item">
+		<div class="help-text">
+			<strong>How to use:</strong><br>
+			1. The health meter fills red from bottom to top based on current HP<br>
+			2. Current health value is displayed as white text in the center<br>
+			3. Optionally provide a mask image for custom styling
+		</div>
+	</div>
+
+	<script>
+		let websocket = null;
+		let pluginUUID = null;
+		let actionUUID = null;
+		let actionContext = null;
+		let settingsCache = {};
+
+		// Connect to Stream Deck
+		function connectElgatoStreamDeckSocket(port, uuid, registerEvent, info, actionInfo) {
+			pluginUUID = uuid;
+
+			const parsedActionInfo = JSON.parse(actionInfo);
+			actionContext = parsedActionInfo.context;
+			actionUUID = parsedActionInfo.action;
+			settingsCache = parsedActionInfo.payload.settings;
+
+			websocket = new WebSocket('ws://localhost:' + port);
+
+			websocket.onopen = function() {
+				const registerPayload = {
+					event: registerEvent,
+					uuid: uuid
+				};
+				websocket.send(JSON.stringify(registerPayload));
+
+				// Load settings into UI
+				loadSettings();
+			};
+
+			websocket.onmessage = function(evt) {
+				const data = JSON.parse(evt.data);
+
+				if (data.event === 'didReceiveSettings') {
+					settingsCache = data.payload.settings;
+					loadSettings();
+				}
+			};
+		}
+
+		// Load settings into UI
+		function loadSettings() {
+			document.getElementById('serverUrl').value = settingsCache.serverUrl || 'http://localhost:8085/state';
+			document.getElementById('pollInterval').value = settingsCache.pollInterval || 200;
+			document.getElementById('maskImage').value = settingsCache.maskImage || '';
+		}
+
+		// Save settings
+		function saveSettings() {
+			settingsCache = {
+				serverUrl: document.getElementById('serverUrl').value,
+				pollInterval: parseInt(document.getElementById('pollInterval').value),
+				maskImage: document.getElementById('maskImage').value
+			};
+
+			if (websocket && websocket.readyState === 1) {
+				const payload = {
+					event: 'setSettings',
+					context: actionContext,
+					payload: settingsCache
+				};
+				websocket.send(JSON.stringify(payload));
+			}
+		}
+
+		// Add event listeners
+		document.getElementById('serverUrl').addEventListener('input', saveSettings);
+		document.getElementById('pollInterval').addEventListener('input', saveSettings);
+		document.getElementById('maskImage').addEventListener('input', saveSettings);
+	</script>
+</body>
+</html>
