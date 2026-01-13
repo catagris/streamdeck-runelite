@@ -1,9 +1,14 @@
+<p align="center">
+  <img src="Icon.png" alt="Streamdeck-Runelite Logo" width="200">
+</p>
+
 # RuneLite Stream Deck Plugin
 
 A Stream Deck plugin that integrates with Old School RuneScape through RuneLite, providing real-time game status displays and limited buttons.
 
 ## Requirements
 
+- **Windows 10 or later** (macOS not supported due to `keysender` dependency for keyboard input)
 - [Stream Deck](https://www.elgato.com/stream-deck) software 6.9+
 - [RuneLite](https://runelite.net/) client
 - [RuneLite Stream Deck Plugin](https://github.com/catagris/runelite-streamdeck) - Required for communication between RuneLite and Stream Deck
