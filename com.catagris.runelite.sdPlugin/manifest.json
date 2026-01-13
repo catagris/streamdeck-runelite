@@ -15,10 +15,12 @@
 			],
 			"States": [
 				{
-					"Name": "Inactive"
+					"Name": "Inactive",
+					"Image": "imgs/actions/tab-button/icon"
 				},
 				{
-					"Name": "Active"
+					"Name": "Active",
+					"Image": "imgs/actions/tab-button/icon"
 				}
 			]
 		},
@@ -33,7 +35,8 @@
 			],
 			"States": [
 				{
-					"Name": "Default"
+					"Name": "Default",
+					"Image": "imgs/actions/health-meter/icon"
 				}
 			]
 		},
@@ -48,7 +51,8 @@
 			],
 			"States": [
 				{
-					"Name": "Default"
+					"Name": "Default",
+					"Image": "imgs/actions/run-meter/icon"
 				}
 			]
 		},
@@ -63,7 +67,8 @@
 			],
 			"States": [
 				{
-					"Name": "Default"
+					"Name": "Default",
+					"Image": "imgs/actions/prayer-meter/icon"
 				}
 			]
 		},
@@ -78,7 +83,8 @@
 			],
 			"States": [
 				{
-					"Name": "Default"
+					"Name": "Default",
+					"Image": "imgs/actions/special-attack-meter/icon"
 				}
 			]
 		},
@@ -93,7 +99,8 @@
 			],
 			"States": [
 				{
-					"Name": "Default"
+					"Name": "Default",
+					"Image": "imgs/actions/map-button/icon"
 				}
 			]
 		},
@@ -109,10 +116,12 @@
 			],
 			"States": [
 				{
-					"Name": "Inactive"
+					"Name": "Inactive",
+					"Image": "imgs/actions/prayer-button/icon"
 				},
 				{
-					"Name": "Active"
+					"Name": "Active",
+					"Image": "imgs/actions/prayer-button/icon"
 				}
 			]
 		}
