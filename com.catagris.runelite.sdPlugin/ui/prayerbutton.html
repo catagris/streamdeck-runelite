@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+	<title>Prayer Button Settings</title>
+	<meta charset="utf-8" />
+	<script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+	<style>
+		body {
+			margin: 10px;
+			font-family: Arial, sans-serif;
+			color: #D8D8D8;
+			background-color: #2D2D2D;
+		}
+	</style>
+</head>
+<body>
+	<sdpi-item label="Prayer">
+		<sdpi-select setting="prayerName" default="protect_from_melee">
+			<optgroup label="Defence">
+				<option value="thick_skin">Thick Skin</option>
+				<option value="rock_skin">Rock Skin</option>
+				<option value="steel_skin">Steel Skin</option>
+			</optgroup>
+			<optgroup label="Strength">
+				<option value="burst_of_strength">Burst of Strength</option>
+				<option value="superhuman_strength">Superhuman Strength</option>
+				<option value="ultimate_strength">Ultimate Strength</option>
+			</optgroup>
+			<optgroup label="Attack">
+				<option value="clarity_of_thought">Clarity of Thought</option>
+				<option value="improved_reflexes">Improved Reflexes</option>
+				<option value="incredible_reflexes">Incredible Reflexes</option>
+			</optgroup>
+			<optgroup label="Ranged">
+				<option value="sharp_eye">Sharp Eye</option>
+				<option value="hawk_eye">Hawk Eye</option>
+				<option value="eagle_eye">Eagle Eye</option>
+				<option value="deadeye">Deadeye</option>
+				<option value="rigour">Rigour</option>
+			</optgroup>
+			<optgroup label="Magic">
+				<option value="mystic_will">Mystic Will</option>
+				<option value="mystic_lore">Mystic Lore</option>
+				<option value="mystic_might">Mystic Might</option>
+				<option value="mystic_vigour">Mystic Vigour</option>
+				<option value="augury">Augury</option>
+			</optgroup>
+			<optgroup label="Restoration">
+				<option value="rapid_restore">Rapid Restore</option>
+				<option value="rapid_heal">Rapid Heal</option>
+				<option value="preserve">Preserve</option>
+			</optgroup>
+			<optgroup label="Protection">
+				<option value="protect_item">Protect Item</option>
+				<option value="protect_from_magic">Protect from Magic</option>
+				<option value="protect_from_missiles">Protect from Missiles</option>
+				<option value="protect_from_melee">Protect from Melee</option>
+			</optgroup>
+			<optgroup label="Combat">
+				<option value="retribution">Retribution</option>
+				<option value="redemption">Redemption</option>
+				<option value="smite">Smite</option>
+				<option value="chivalry">Chivalry</option>
+				<option value="piety">Piety</option>
+			</optgroup>
+		</sdpi-select>
+	</sdpi-item>
+
+	<sdpi-item label="Server URL">
+		<sdpi-textfield setting="serverUrl" default="http://localhost:8085/state" placeholder="http://localhost:8085/state"></sdpi-textfield>
+	</sdpi-item>
+
+	<sdpi-item label="Poll Interval (ms)">
+		<sdpi-range setting="pollInterval" min="50" max="2000" step="50" default="200" showlabels></sdpi-range>
+	</sdpi-item>
+</body>
+</html>

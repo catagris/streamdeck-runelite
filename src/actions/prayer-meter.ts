@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Tracks the number of run meter buttons currently visible
+ * Tracks the number of prayer meter buttons currently visible
  */
 let activeButtonCount = 0;
 
@@ -13,7 +13,7 @@ let activeButtonCount = 0;
 let pollingInterval: NodeJS.Timeout | null = null;
 
 /**
- * Map to store run meter button instances by context
+ * Map to store prayer meter button instances by context
  */
 const activeButtons = new Map<string, any>();
 
@@ -25,7 +25,7 @@ let cachedServerUrl = "http://localhost:8085/state";
 /**
  * Cached settings to avoid repeated getSettings() calls
  */
-const cachedSettings = new Map<string, RunMeterSettings>();
+const cachedSettings = new Map<string, PrayerMeterSettings>();
 
 /**
  * Cached images as base64 data URI
@@ -40,44 +40,44 @@ let cachedDisabledOverlay: string | null = null;
  */
 function loadImage(filename: string): string {
 	try {
-		const imgPath = path.join(process.cwd(), 'imgs', 'actions', 'run-meter', filename);
+		const imgPath = path.join(process.cwd(), 'imgs', 'actions', 'prayer-meter', filename);
 		const imageBuffer = fs.readFileSync(imgPath);
 		return `data:image/png;base64,${imageBuffer.toString('base64')}`;
 	} catch (error) {
-		console.log('[RunMeter] Error loading image:', filename, error);
+		console.log('[PrayerMeter] Error loading image:', filename, error);
 		return '';
 	}
 }
 
 /**
- * Gets the background fill image based on run state
+ * Gets the background fill image based on quick prayer state
  */
 function getBackgroundImage(enabled: boolean): string {
 	if (enabled) {
 		if (!cachedEnabledBackground) {
-			cachedEnabledBackground = loadImage('Run_energy_orb_enabled_backgroud.png');
+			cachedEnabledBackground = loadImage('Prayer_orb_enabled_backgroud.png');
 		}
 		return cachedEnabledBackground;
 	} else {
 		if (!cachedDisabledBackground) {
-			cachedDisabledBackground = loadImage('Run_energy_orb_disabled_backgroud.png');
+			cachedDisabledBackground = loadImage('Prayer_orb_disabled_backgroud.png');
 		}
 		return cachedDisabledBackground;
 	}
 }
 
 /**
- * Gets the overlay image based on run state
+ * Gets the overlay image based on quick prayer state
  */
 function getOverlayImage(enabled: boolean): string {
 	if (enabled) {
 		if (!cachedEnabledOverlay) {
-			cachedEnabledOverlay = loadImage('Run_energy_orb_enabled.png');
+			cachedEnabledOverlay = loadImage('Prayer_orb_enabled.png');
 		}
 		return cachedEnabledOverlay;
 	} else {
 		if (!cachedDisabledOverlay) {
-			cachedDisabledOverlay = loadImage('Run_energy_orb_disabled.png');
+			cachedDisabledOverlay = loadImage('Prayer_orb_disabled.png');
 		}
 		return cachedDisabledOverlay;
 	}
@@ -106,29 +106,27 @@ function getPercentColor(percent: number): string {
 }
 
 /**
- * Creates an image with the run meter visualization
+ * Creates an image with the prayer meter visualization
  * Layers: black background -> fill PNG -> black mask (from top) -> overlay PNG -> text
  */
-function createRunMeterImage(data: RuneLiteState, settings: RunMeterSettings): string {
-	// Get run energy data (0-10000)
-	const runEnergy = data.stats?.runEnergy || 0;
-	const runEnabled = data.stats?.runEnabled || false;
+function createPrayerMeterImage(data: RuneLiteState, settings: PrayerMeterSettings): string {
+	// Get prayer data
+	const currentPrayer = data.stats?.prayer?.current || 0;
+	const maxPrayer = data.stats?.prayer?.max || 1;
+	const quickPrayerActive = data.prayers?.quickPrayerActive || false;
 
-	// Calculate percentage (runEnergy is 0-10000)
-	const energyPercent = runEnergy / 10000;
-
-	// Display value (0-100)
-	const displayValue = Math.floor(runEnergy / 100);
+	// Calculate percentage
+	const prayerPercent = maxPrayer > 0 ? currentPrayer / maxPrayer : 0;
 
 	// Determine text color based on settings
-	const textColor = settings.coloredNumbers === true ? getPercentColor(energyPercent) : '#FFFFFF';
+	const textColor = settings.coloredNumbers === true ? getPercentColor(prayerPercent) : '#FFFFFF';
 
 	// Calculate mask height (from top - covers the drained portion)
-	const maskHeight = Math.round(144 * (1 - energyPercent));
+	const maskHeight = Math.round(144 * (1 - prayerPercent));
 
-	// Get appropriate images based on run state
-	const backgroundData = getBackgroundImage(runEnabled);
-	const overlayData = getOverlayImage(runEnabled);
+	// Get appropriate images based on quick prayer state
+	const backgroundData = getBackgroundImage(quickPrayerActive);
+	const overlayData = getOverlayImage(quickPrayerActive);
 
 	// Create SVG with layered approach
 	let svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">`;
@@ -146,16 +144,16 @@ function createRunMeterImage(data: RuneLiteState, settings: RunMeterSettings): s
 		svg += `<rect x="0" y="0" width="144" height="${maskHeight}" fill="#000000"/>`;
 	}
 
-	// Layer 4: Overlay (frame with foot icon)
+	// Layer 4: Overlay (frame with prayer icon)
 	if (overlayData) {
 		svg += `<image href="${overlayData}" x="0" y="0" width="144" height="144"/>`;
 	}
 
-	// Layer 5: Run energy text (with black stroke for readability)
+	// Layer 5: Prayer text (with black stroke for readability)
 	if (settings.showNumbers !== false) {
 		const textPos = getTextPosition(settings.textPosition);
-		svg += `<text x="${textPos.x}" y="${textPos.y}" font-family="Arial" font-size="36" font-weight="bold" text-anchor="middle" dominant-baseline="middle" stroke="#000000" stroke-width="3" fill="none">${displayValue}</text>`;
-		svg += `<text x="${textPos.x}" y="${textPos.y}" font-family="Arial" font-size="36" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="${textColor}">${displayValue}</text>`;
+		svg += `<text x="${textPos.x}" y="${textPos.y}" font-family="Arial" font-size="36" font-weight="bold" text-anchor="middle" dominant-baseline="middle" stroke="#000000" stroke-width="3" fill="none">${currentPrayer}</text>`;
+		svg += `<text x="${textPos.x}" y="${textPos.y}" font-family="Arial" font-size="36" font-weight="bold" text-anchor="middle" dominant-baseline="middle" fill="${textColor}">${currentPrayer}</text>`;
 	}
 
 	svg += `</svg>`;
@@ -166,14 +164,14 @@ function createRunMeterImage(data: RuneLiteState, settings: RunMeterSettings): s
 }
 
 /**
- * Run Meter Button action
+ * Prayer Meter Button action
  */
-@action({ UUID: "com.catagris.runelite.runmeter" })
-export class RunMeter extends SingletonAction<RunMeterSettings> {
+@action({ UUID: "com.catagris.runelite.prayermeter" })
+export class PrayerMeter extends SingletonAction<PrayerMeterSettings> {
 	/**
 	 * Called when the action becomes visible on the Stream Deck
 	 */
-	override async onWillAppear(ev: WillAppearEvent<RunMeterSettings>): Promise<void> {
+	override async onWillAppear(ev: WillAppearEvent<PrayerMeterSettings>): Promise<void> {
 		const settings = ev.payload.settings;
 
 		let needsUpdate = false;
@@ -214,14 +212,14 @@ export class RunMeter extends SingletonAction<RunMeterSettings> {
 			startPolling(settings.pollInterval);
 		} else {
 			// If polling is already running, immediately update this button
-			updateRunMeters();
+			updatePrayerMeters();
 		}
 	}
 
 	/**
 	 * Called when the action is removed from the Stream Deck
 	 */
-	override async onWillDisappear(ev: WillDisappearEvent<RunMeterSettings>): Promise<void> {
+	override async onWillDisappear(ev: WillDisappearEvent<PrayerMeterSettings>): Promise<void> {
 		// Remove the action instance
 		activeButtons.delete(ev.action.id);
 
@@ -240,7 +238,7 @@ export class RunMeter extends SingletonAction<RunMeterSettings> {
 	/**
 	 * Called when settings are updated via property inspector
 	 */
-	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<RunMeterSettings>): Promise<void> {
+	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<PrayerMeterSettings>): Promise<void> {
 		const settings = ev.payload.settings;
 
 		// Update cached server URL if changed
@@ -252,7 +250,7 @@ export class RunMeter extends SingletonAction<RunMeterSettings> {
 		cachedSettings.set(ev.action.id, settings);
 
 		// Immediately update to reflect new settings
-		updateRunMeters();
+		updatePrayerMeters();
 
 		// Update poll interval if changed
 		if (settings.pollInterval && pollingInterval) {
@@ -271,11 +269,11 @@ function startPolling(interval: number): void {
 	}
 
 	pollingInterval = setInterval(() => {
-		updateRunMeters();
+		updatePrayerMeters();
 	}, interval);
 
 	// Immediately update on start
-	updateRunMeters();
+	updatePrayerMeters();
 }
 
 /**
@@ -289,9 +287,9 @@ function stopPolling(): void {
 }
 
 /**
- * Updates all run meter buttons by fetching the current state from RuneLite
+ * Updates all prayer meter buttons by fetching the current state from RuneLite
  */
-async function updateRunMeters(): Promise<void> {
+async function updatePrayerMeters(): Promise<void> {
 	if (activeButtons.size === 0) {
 		return;
 	}
@@ -309,15 +307,15 @@ async function updateRunMeters(): Promise<void> {
 
 		const data = await response.json() as RuneLiteState;
 
-		// Update all run meter buttons in parallel
+		// Update all prayer meter buttons in parallel
 		await Promise.all(
 			Array.from(activeButtons.entries()).map(async ([id, action]) => {
 				try {
 					const settings = cachedSettings.get(id) || {};
-					const image = createRunMeterImage(data, settings);
+					const image = createPrayerMeterImage(data, settings);
 					await action.setImage(image);
 				} catch (error) {
-					console.log(`[RunMeter] Error updating button ${id}:`, error);
+					console.log(`[PrayerMeter] Error updating button ${id}:`, error);
 				}
 			})
 		);
@@ -351,9 +349,9 @@ function getTextPosition(position: TextPosition | undefined): { x: number; y: nu
 }
 
 /**
- * Settings for run meter buttons
+ * Settings for prayer meter buttons
  */
-type RunMeterSettings = {
+type PrayerMeterSettings = {
 	serverUrl?: string;
 	pollInterval?: number;
 	coloredNumbers?: boolean;
@@ -382,5 +380,8 @@ type RuneLiteState = {
 		runEnergy?: number;
 		runEnabled?: boolean;
 		specialAttack?: number;
+	};
+	prayers?: {
+		quickPrayerActive?: boolean;
 	};
 };

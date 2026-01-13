@@ -1,10 +1,9 @@
-import { action, SingletonAction, WillAppearEvent, WillDisappearEvent, KeyDownEvent, DidReceiveSettingsEvent } from "@elgato/streamdeck";
-import { Hardware } from "keysender";
+import { action, SingletonAction, WillAppearEvent, WillDisappearEvent, DidReceiveSettingsEvent } from "@elgato/streamdeck";
 import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * Tracks the number of tab buttons currently visible
+ * Tracks the number of prayer buttons currently visible
  */
 let activeButtonCount = 0;
 
@@ -14,9 +13,9 @@ let activeButtonCount = 0;
 let pollingInterval: NodeJS.Timeout | null = null;
 
 /**
- * Map to store tab button instances by context
+ * Map to store prayer button instances by context
  */
-const activeButtons = new Map<string, { action: any; settings: TabSettings }>();
+const activeButtons = new Map<string, { action: any; settings: PrayerButtonSettings }>();
 
 /**
  * Cached server URL to avoid repeated getSettings() calls
@@ -36,76 +35,84 @@ function loadImage(filename: string): string {
 	if (cached) return cached;
 
 	try {
-		const imgPath = path.join(process.cwd(), 'imgs', 'actions', 'tab-button', filename);
+		const imgPath = path.join(process.cwd(), 'imgs', 'actions', 'prayer-button', filename);
 		const imageBuffer = fs.readFileSync(imgPath);
 		const dataUri = `data:image/png;base64,${imageBuffer.toString('base64')}`;
 		cachedImages.set(filename, dataUri);
 		return dataUri;
 	} catch (error) {
-		console.log('[TabButton] Error loading image:', filename, error);
+		console.log('[PrayerButton] Error loading image:', filename, error);
 		return '';
 	}
 }
 
 /**
- * Maps tab names to their icon filenames
+ * Maps prayer JSON keys to their icon filenames
  */
-const TAB_ICONS: { [key: string]: string } = {
-	combat: 'combat.png',
-	skills: 'skills.png',
-	quests: 'quest.png',
-	inventory: 'inventory.png',
-	equipment: 'equipment.png',
-	prayer: 'prayer.png',
-	magic: 'magic.png',
-	grouping: 'grouping_chat.png',
-	account: 'account.png',
-	friends: 'friends.png',
-	settings: 'settings.png',
-	emotes: 'emotes.png',
-	music: 'music.png',
+const PRAYER_ICONS: { [key: string]: string } = {
+	thick_skin: 'Thick_Skin.png',
+	burst_of_strength: 'Burst_of_Strength.png',
+	clarity_of_thought: 'Clarity_of_Thought.png',
+	sharp_eye: 'Sharp_Eye.png',
+	mystic_will: 'Mystic_Will.png',
+	rock_skin: 'Rock_Skin.png',
+	superhuman_strength: 'Superhuman_Strength.png',
+	improved_reflexes: 'Improved_Reflexes.png',
+	rapid_restore: 'Rapid_Restore.png',
+	rapid_heal: 'Rapid_Heal.png',
+	protect_item: 'Protect_Item.png',
+	hawk_eye: 'Hawk_Eye.png',
+	mystic_lore: 'Mystic_Lore.png',
+	steel_skin: 'Steel_Skin.png',
+	ultimate_strength: 'Ultimate_Strength.png',
+	incredible_reflexes: 'Incredible_Reflexes.png',
+	protect_from_magic: 'Protect_from_Magic.png',
+	protect_from_missiles: 'Protect_from_Missiles.png',
+	protect_from_melee: 'Protect_from_Melee.png',
+	eagle_eye: 'Eagle_Eye.png',
+	mystic_might: 'Mystic_Might.png',
+	retribution: 'Retribution.png',
+	redemption: 'Redemption.png',
+	smite: 'Smite.png',
+	preserve: 'Preserve.png',
+	chivalry: 'Chivalry.png',
+	deadeye: 'Deadeye.png',
+	mystic_vigour: 'Mystic_Vigour.png',
+	piety: 'Piety.png',
+	rigour: 'Rigour.png',
+	augury: 'Augury.png',
 };
 
 /**
- * Default OSRS keybindings for each tab
+ * Creates a prayer button image with layered background and icon
+ * Layers: black bg -> deactivated bg -> activated glow (if active) -> prayer icon
  */
-const DEFAULT_KEYS: { [key: string]: string } = {
-	combat: 'f1',
-	skills: 'f2',
-	quests: 'f3',
-	inventory: 'escape',
-	equipment: 'f4',
-	prayer: 'f5',
-	magic: 'f6',
-	grouping: 'f7',
-	account: 'f8',
-	friends: 'f9',
-	settings: 'f10',
-	emotes: 'f11',
-	music: 'f12',
-};
+function createPrayerImage(prayerName: string, isActive: boolean): string {
+	const iconFile = PRAYER_ICONS[prayerName.toLowerCase()] || 'Protect_from_Melee.png';
 
-/**
- * Creates a tab button image with layered background and icon
- */
-function createTabImage(tabName: string, isActive: boolean): string {
-	const backgroundFile = isActive ? 'backgroud_active.png' : 'backgroud_unactive.png';
-	const iconFile = TAB_ICONS[tabName.toLowerCase()] || 'inventory.png';
-
-	const backgroundData = loadImage(backgroundFile);
+	const deactivatedData = loadImage('Deactivated_prayer.png');
+	const activatedData = loadImage('Activated_prayer.png');
 	const iconData = loadImage(iconFile);
 
 	// Create SVG with layered images
 	let svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">`;
 
-	// Layer 1: Background (active or inactive)
-	if (backgroundData) {
-		svg += `<image href="${backgroundData}" x="0" y="0" width="144" height="144"/>`;
+	// Layer 0: Black background
+	svg += `<rect width="144" height="144" fill="#000000"/>`;
+
+	// Layer 1: Deactivated background (always shown)
+	if (deactivatedData) {
+		svg += `<image href="${deactivatedData}" x="0" y="0" width="144" height="144" image-rendering="pixelated"/>`;
 	}
 
-	// Layer 2: Tab icon overlay
+	// Layer 2: Activated glow (only when prayer is active)
+	if (isActive && activatedData) {
+		svg += `<image href="${activatedData}" x="0" y="0" width="144" height="144" image-rendering="pixelated"/>`;
+	}
+
+	// Layer 3: Prayer icon overlay - 30x30 scaled to 120x120 and centered
 	if (iconData) {
-		svg += `<image href="${iconData}" x="0" y="0" width="144" height="144"/>`;
+		svg += `<image href="${iconData}" x="12" y="12" width="120" height="120" image-rendering="pixelated"/>`;
 	}
 
 	svg += `</svg>`;
@@ -116,15 +123,14 @@ function createTabImage(tabName: string, isActive: boolean): string {
 }
 
 /**
- * Configurable Tab Button action
+ * Prayer Button action
  */
-@action({ UUID: "com.catagris.runelite.tab" })
-export class TabButton extends SingletonAction<TabSettings> {
+@action({ UUID: "com.catagris.runelite.prayerbutton" })
+export class PrayerButton extends SingletonAction<PrayerButtonSettings> {
 	/**
 	 * Called when the action becomes visible on the Stream Deck
 	 */
-	override async onWillAppear(ev: WillAppearEvent<TabSettings>): Promise<void> {
-		// Set default settings if not present
+	override async onWillAppear(ev: WillAppearEvent<PrayerButtonSettings>): Promise<void> {
 		const settings = ev.payload.settings;
 		let needsUpdate = false;
 
@@ -136,12 +142,8 @@ export class TabButton extends SingletonAction<TabSettings> {
 			settings.pollInterval = 200;
 			needsUpdate = true;
 		}
-		if (!settings.tabName) {
-			settings.tabName = "inventory";
-			needsUpdate = true;
-		}
-		if (!settings.keyToPress) {
-			settings.keyToPress = DEFAULT_KEYS[settings.tabName.toLowerCase()] || "escape";
+		if (!settings.prayerName) {
+			settings.prayerName = "protect_from_melee";
 			needsUpdate = true;
 		}
 
@@ -165,7 +167,7 @@ export class TabButton extends SingletonAction<TabSettings> {
 		activeButtonCount++;
 
 		// Set initial image (inactive state)
-		const image = createTabImage(settings.tabName, false);
+		const image = createPrayerImage(settings.prayerName, false);
 		await ev.action.setImage(image);
 
 		// Start polling if this is the first button
@@ -173,14 +175,14 @@ export class TabButton extends SingletonAction<TabSettings> {
 			startPolling(settings.pollInterval);
 		} else {
 			// If polling is already running, immediately update this button
-			updateTabButtons();
+			updatePrayerButtons();
 		}
 	}
 
 	/**
 	 * Called when the action is removed from the Stream Deck
 	 */
-	override async onWillDisappear(ev: WillDisappearEvent<TabSettings>): Promise<void> {
+	override async onWillDisappear(ev: WillDisappearEvent<PrayerButtonSettings>): Promise<void> {
 		// Remove the action instance
 		activeButtons.delete(ev.action.id);
 
@@ -196,7 +198,7 @@ export class TabButton extends SingletonAction<TabSettings> {
 	/**
 	 * Called when settings are updated via property inspector
 	 */
-	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<TabSettings>): Promise<void> {
+	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<PrayerButtonSettings>): Promise<void> {
 		const settings = ev.payload.settings;
 
 		// Update cached server URL if changed
@@ -211,30 +213,12 @@ export class TabButton extends SingletonAction<TabSettings> {
 		}
 
 		// Immediately update to reflect new settings
-		updateTabButtons();
+		updatePrayerButtons();
 
 		// Update poll interval if changed
 		if (settings.pollInterval && pollingInterval) {
 			stopPolling();
 			startPolling(settings.pollInterval);
-		}
-	}
-
-	/**
-	 * Called when the button is pressed
-	 */
-	override async onKeyDown(ev: KeyDownEvent<TabSettings>): Promise<void> {
-		const settings = ev.payload.settings;
-		const keyToPress = (settings.keyToPress || "escape") as "f1" | "f2" | "f3" | "f4" | "f5" | "f6" | "f7" | "f8" | "f9" | "f10" | "f11" | "f12" | "escape";
-
-		try {
-			// Create hardware instance (null handle targets the foreground window)
-			const hardware = new Hardware(null);
-
-			// Send the key press - button state will be updated by polling
-			await hardware.keyboard.sendKey(keyToPress);
-		} catch (error) {
-			console.log('[TabButton] Error sending key:', error);
 		}
 	}
 }
@@ -244,15 +228,15 @@ export class TabButton extends SingletonAction<TabSettings> {
  */
 function startPolling(interval: number): void {
 	if (pollingInterval) {
-		return; // Already polling
+		return;
 	}
 
 	pollingInterval = setInterval(() => {
-		updateTabButtons();
+		updatePrayerButtons();
 	}, interval);
 
 	// Immediately update on start
-	updateTabButtons();
+	updatePrayerButtons();
 }
 
 /**
@@ -267,20 +251,19 @@ function stopPolling(): void {
 
 /**
  * Last known states for each button to avoid unnecessary image updates
- * Stores: { isActive: boolean, tabName: string }
  */
-const lastButtonStates = new Map<string, { isActive: boolean; tabName: string }>();
+const lastButtonStates = new Map<string, { isActive: boolean; prayerName: string }>();
 
 /**
- * Updates all tab buttons by fetching the current state from RuneLite
+ * Updates all prayer buttons by fetching the current state from RuneLite
  */
-async function updateTabButtons(): Promise<void> {
+async function updatePrayerButtons(): Promise<void> {
 	if (activeButtons.size === 0) {
 		return;
 	}
 
 	const controller = new AbortController();
-	const timeoutId = setTimeout(() => controller.abort(), 1000); // 1 second timeout
+	const timeoutId = setTimeout(() => controller.abort(), 1000);
 
 	try {
 		const response = await fetch(cachedServerUrl, { signal: controller.signal });
@@ -297,33 +280,30 @@ async function updateTabButtons(): Promise<void> {
 			// Not logged in - set all buttons to inactive state
 			await Promise.all(
 				Array.from(activeButtons.entries()).map(async ([id, buttonData]) => {
-					const tabName = (buttonData.settings.tabName || 'inventory').toLowerCase();
+					const prayerName = (buttonData.settings.prayerName || 'protect_from_melee').toLowerCase();
 					const lastState = lastButtonStates.get(id);
-					if (lastState?.isActive !== false || lastState?.tabName !== tabName) {
-						const image = createTabImage(tabName, false);
+					if (lastState?.isActive !== false || lastState?.prayerName !== prayerName) {
+						const image = createPrayerImage(prayerName, false);
 						await buttonData.action.setImage(image);
-						lastButtonStates.set(id, { isActive: false, tabName });
+						lastButtonStates.set(id, { isActive: false, prayerName });
 					}
 				})
 			);
 			return;
 		}
 
-		// Get the active tab
-		const activeTab = data.activeTab?.toLowerCase();
-
-		// Update all buttons based on whether they match the active tab
+		// Update all buttons based on whether their prayer is active
 		await Promise.all(
 			Array.from(activeButtons.entries()).map(async ([id, buttonData]) => {
-				const tabName = (buttonData.settings.tabName || 'inventory').toLowerCase();
-				const isActive = tabName === activeTab;
+				const prayerName = (buttonData.settings.prayerName || 'protect_from_melee').toLowerCase();
+				const isActive = data.prayers?.[prayerName] === true;
 				const lastState = lastButtonStates.get(id);
 
-				// Only update image if state or tab name changed
-				if (lastState?.isActive !== isActive || lastState?.tabName !== tabName) {
-					const image = createTabImage(tabName, isActive);
+				// Only update image if state or prayer name changed
+				if (lastState?.isActive !== isActive || lastState?.prayerName !== prayerName) {
+					const image = createPrayerImage(prayerName, isActive);
 					await buttonData.action.setImage(image);
-					lastButtonStates.set(id, { isActive, tabName });
+					lastButtonStates.set(id, { isActive, prayerName });
 				}
 			})
 		);
@@ -333,12 +313,12 @@ async function updateTabButtons(): Promise<void> {
 		// Connection error, timeout, or RuneLite is closed - set all to inactive
 		await Promise.all(
 			Array.from(activeButtons.entries()).map(async ([id, buttonData]) => {
-				const tabName = (buttonData.settings.tabName || 'inventory').toLowerCase();
+				const prayerName = (buttonData.settings.prayerName || 'protect_from_melee').toLowerCase();
 				const lastState = lastButtonStates.get(id);
-				if (lastState?.isActive !== false || lastState?.tabName !== tabName) {
-					const image = createTabImage(tabName, false);
+				if (lastState?.isActive !== false || lastState?.prayerName !== prayerName) {
+					const image = createPrayerImage(prayerName, false);
 					await buttonData.action.setImage(image);
-					lastButtonStates.set(id, { isActive: false, tabName });
+					lastButtonStates.set(id, { isActive: false, prayerName });
 				}
 			})
 		);
@@ -346,13 +326,12 @@ async function updateTabButtons(): Promise<void> {
 }
 
 /**
- * Settings for tab buttons
+ * Settings for prayer buttons
  */
-type TabSettings = {
+type PrayerButtonSettings = {
 	serverUrl?: string;
 	pollInterval?: number;
-	tabName?: string;
-	keyToPress?: string;
+	prayerName?: string;
 };
 
 /**
@@ -363,5 +342,7 @@ type RuneLiteState = {
 		name: string;
 		world: number;
 	};
-	activeTab?: string;
+	prayers?: {
+		[key: string]: boolean;
+	};
 };

@@ -6,7 +6,7 @@
 		{
 			"Name": "Tab Button",
 			"UUID": "com.catagris.runelite.tab",
-			"Icon": "imgs/actions/tab/icon",
+			"Icon": "imgs/actions/tab-button/icon",
 			"Tooltip": "Configurable tab indicator - highlights when specified tab is active",
 			"PropertyInspectorPath": "ui/tab.html",
 			"DisableCaching": true,
@@ -25,7 +25,7 @@
 		{
 			"Name": "Health Meter",
 			"UUID": "com.catagris.runelite.healthmeter",
-			"Icon": "imgs/actions/tab/icon",
+			"Icon": "imgs/actions/health-meter/icon",
 			"Tooltip": "Displays current health with visual meter and number",
 			"PropertyInspectorPath": "ui/healthmeter.html",
 			"Controllers": [
@@ -40,7 +40,7 @@
 		{
 			"Name": "Run Meter",
 			"UUID": "com.catagris.runelite.runmeter",
-			"Icon": "imgs/actions/run/icon",
+			"Icon": "imgs/actions/run-meter/icon",
 			"Tooltip": "Displays current run energy with visual meter - changes appearance when run is toggled",
 			"PropertyInspectorPath": "ui/runmeter.html",
 			"Controllers": [
@@ -49,6 +49,70 @@
 			"States": [
 				{
 					"Name": "Default"
+				}
+			]
+		},
+		{
+			"Name": "Prayer Meter",
+			"UUID": "com.catagris.runelite.prayermeter",
+			"Icon": "imgs/actions/prayer-meter/icon",
+			"Tooltip": "Displays current prayer points with visual meter - changes appearance when quick prayers are active",
+			"PropertyInspectorPath": "ui/prayermeter.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Name": "Default"
+				}
+			]
+		},
+		{
+			"Name": "Special Attack Meter",
+			"UUID": "com.catagris.runelite.specialattackmeter",
+			"Icon": "imgs/actions/special-attack-meter/icon",
+			"Tooltip": "Displays special attack energy with visual meter - changes appearance based on weapon and activation state",
+			"PropertyInspectorPath": "ui/specialattackmeter.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Name": "Default"
+				}
+			]
+		},
+		{
+			"Name": "Map Button",
+			"UUID": "com.catagris.runelite.mapbutton",
+			"Icon": "imgs/actions/map-button/icon",
+			"Tooltip": "Opens the world map (Ctrl+M)",
+			"PropertyInspectorPath": "ui/mapbutton.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Name": "Default"
+				}
+			]
+		},
+		{
+			"Name": "Prayer Button",
+			"UUID": "com.catagris.runelite.prayerbutton",
+			"Icon": "imgs/actions/prayer-button/icon",
+			"Tooltip": "Shows prayer active/inactive state - select which prayer to monitor",
+			"PropertyInspectorPath": "ui/prayerbutton.html",
+			"DisableCaching": true,
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Name": "Inactive"
+				},
+				{
+					"Name": "Active"
 				}
 			]
 		}

@@ -3,6 +3,10 @@ import streamDeck from "@elgato/streamdeck";
 import { TabButton } from "./actions/tab-button";
 import { HealthMeter } from "./actions/health-meter";
 import { RunMeter } from "./actions/run-meter";
+import { PrayerMeter } from "./actions/prayer-meter";
+import { SpecialAttackMeter } from "./actions/special-attack-meter";
+import { MapButton } from "./actions/map-button";
+import { PrayerButton } from "./actions/prayer-button";
 
 console.log("[Plugin] Starting RuneLite Stream Deck Plugin");
 
@@ -18,6 +22,14 @@ try {
 	console.log("[Plugin] HealthMeter registered");
 	streamDeck.actions.registerAction(new RunMeter());
 	console.log("[Plugin] RunMeter registered");
+	streamDeck.actions.registerAction(new PrayerMeter());
+	console.log("[Plugin] PrayerMeter registered");
+	streamDeck.actions.registerAction(new SpecialAttackMeter());
+	console.log("[Plugin] SpecialAttackMeter registered");
+	streamDeck.actions.registerAction(new MapButton());
+	console.log("[Plugin] MapButton registered");
+	streamDeck.actions.registerAction(new PrayerButton());
+	console.log("[Plugin] PrayerButton registered");
 } catch (error) {
 	console.error("[Plugin] Error registering actions:", error);
 }

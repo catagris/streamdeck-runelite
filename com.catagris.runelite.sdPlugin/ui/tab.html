@@ -1,67 +1,61 @@
 <!DOCTYPE html>
 <html>
-
 <head lang="en">
-    <title>Tab Button Settings</title>
-    <meta charset="utf-8" />
-    <script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+	<title>Tab Button Settings</title>
+	<meta charset="utf-8" />
+	<script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+	<style>
+		body {
+			margin: 10px;
+			font-family: Arial, sans-serif;
+			color: #D8D8D8;
+			background-color: #2D2D2D;
+		}
+	</style>
 </head>
-
 <body>
-    <!--
-        Learn more about property inspector components at https://sdpi-components.dev/docs/components
-    -->
-    <sdpi-item label="Tab Name">
-        <sdpi-select setting="tabName" default="inventory">
-            <option value="combat">Combat</option>
-            <option value="skills">Skills</option>
-            <option value="quests">Quests</option>
-            <option value="inventory">Inventory</option>
-            <option value="equipment">Equipment</option>
-            <option value="prayer">Prayer</option>
-            <option value="magic">Magic</option>
-            <option value="grouping">Grouping</option>
-            <option value="account">Account</option>
-            <option value="friends">Friends</option>
-            <option value="settings">Settings</option>
-            <option value="emotes">Emotes</option>
-            <option value="music">Music</option>
-        </sdpi-select>
-    </sdpi-item>
+	<sdpi-item label="Tab">
+		<sdpi-select setting="tabName" default="inventory">
+			<option value="combat">Combat</option>
+			<option value="skills">Skills</option>
+			<option value="quests">Quests</option>
+			<option value="inventory">Inventory</option>
+			<option value="equipment">Equipment</option>
+			<option value="prayer">Prayer</option>
+			<option value="magic">Magic</option>
+			<option value="grouping">Grouping</option>
+			<option value="account">Account</option>
+			<option value="friends">Friends</option>
+			<option value="settings">Settings</option>
+			<option value="emotes">Emotes</option>
+			<option value="music">Music</option>
+		</sdpi-select>
+	</sdpi-item>
 
-    <sdpi-item label="Key to Press">
-        <sdpi-select setting="keyToPress" default="f1">
-            <option value="escape">Escape</option>
-            <option value="f1">F1</option>
-            <option value="f2">F2</option>
-            <option value="f3">F3</option>
-            <option value="f4">F4</option>
-            <option value="f5">F5</option>
-            <option value="f6">F6</option>
-            <option value="f7">F7</option>
-            <option value="f8">F8</option>
-            <option value="f9">F9</option>
-            <option value="f10">F10</option>
-            <option value="f11">F11</option>
-            <option value="f12">F12</option>
-        </sdpi-select>
-    </sdpi-item>
+	<sdpi-item label="Key to Press">
+		<sdpi-select setting="keyToPress" default="escape">
+			<option value="escape">Escape</option>
+			<option value="f1">F1</option>
+			<option value="f2">F2</option>
+			<option value="f3">F3</option>
+			<option value="f4">F4</option>
+			<option value="f5">F5</option>
+			<option value="f6">F6</option>
+			<option value="f7">F7</option>
+			<option value="f8">F8</option>
+			<option value="f9">F9</option>
+			<option value="f10">F10</option>
+			<option value="f11">F11</option>
+			<option value="f12">F12</option>
+		</sdpi-select>
+	</sdpi-item>
 
-    <sdpi-item label="Active Image">
-        <sdpi-file setting="activeImage" accept="image/*"></sdpi-file>
-    </sdpi-item>
+	<sdpi-item label="Server URL">
+		<sdpi-textfield setting="serverUrl" default="http://localhost:8085/state" placeholder="http://localhost:8085/state"></sdpi-textfield>
+	</sdpi-item>
 
-    <sdpi-item label="Inactive Image">
-        <sdpi-file setting="inactiveImage" accept="image/*"></sdpi-file>
-    </sdpi-item>
-
-    <sdpi-item label="RuneLite Server URL">
-        <sdpi-textfield setting="serverUrl" default="http://localhost:8085/state" placeholder="http://localhost:8085/state"></sdpi-textfield>
-    </sdpi-item>
-
-    <sdpi-item label="Poll Interval (ms)">
-        <sdpi-range setting="pollInterval" min="100" max="2000" step="100" default="200" showlabels></sdpi-range>
-    </sdpi-item>
+	<sdpi-item label="Poll Interval (ms)">
+		<sdpi-range setting="pollInterval" min="50" max="2000" step="50" default="200" showlabels></sdpi-range>
+	</sdpi-item>
 </body>
-
 </html>
