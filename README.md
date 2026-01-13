@@ -45,13 +45,15 @@ Displays a specific prayer icon and shows whether that prayer is currently activ
 
 ## Configuration
 
-Most actions support the following settings:
+Most meter actions support the following settings:
 
-- **Server URL** - The RuneLite plugin endpoint (default: `http://localhost:8085/state`)
-- **Poll Interval** - How often to update the display in milliseconds (default: 200ms)
 - **Show Numbers** - Toggle number display on meter buttons
 - **Colored Numbers** - Numbers change color based on percentage (green to red)
 - **Text Position** - Where to display numbers on the button
+
+## How It Works
+
+The Stream Deck plugin runs an HTTP server on port 8085. The RuneLite plugin pushes game state to `http://localhost:8085/state` via POST requests.
 
 ## Building from Source
 
