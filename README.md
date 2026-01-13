@@ -1,6 +1,6 @@
 # RuneLite Stream Deck Plugin
 
-A Stream Deck plugin that integrates with Old School RuneScape through RuneLite, providing real-time game status displays and quick action buttons.
+A Stream Deck plugin that integrates with Old School RuneScape through RuneLite, providing real-time game status displays and limited buttons.
 
 ## Requirements
 
