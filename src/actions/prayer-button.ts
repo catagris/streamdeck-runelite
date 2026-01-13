@@ -1,26 +1,12 @@
 import { action, SingletonAction, WillAppearEvent, WillDisappearEvent, DidReceiveSettingsEvent } from "@elgato/streamdeck";
 import * as fs from 'fs';
 import * as path from 'path';
-
-/**
- * Tracks the number of prayer buttons currently visible
- */
-let activeButtonCount = 0;
-
-/**
- * Polling interval ID
- */
-let pollingInterval: NodeJS.Timeout | null = null;
+import { getState, addStateListener, removeStateListener, RuneLiteState } from '../state-server';
 
 /**
  * Map to store prayer button instances by context
  */
 const activeButtons = new Map<string, { action: any; settings: PrayerButtonSettings }>();
-
-/**
- * Cached server URL to avoid repeated getSettings() calls
- */
-let cachedServerUrl = "http://localhost:8085/state";
 
 /**
  * Cached images as base64 data URI
@@ -85,7 +71,6 @@ const PRAYER_ICONS: { [key: string]: string } = {
 
 /**
  * Creates a prayer button image with layered background and icon
- * Layers: black bg -> deactivated bg -> activated glow (if active) -> prayer icon
  */
 function createPrayerImage(prayerName: string, isActive: boolean): string {
 	const iconFile = PRAYER_ICONS[prayerName.toLowerCase()] || 'Protect_from_Melee.png';
@@ -94,159 +79,26 @@ function createPrayerImage(prayerName: string, isActive: boolean): string {
 	const activatedData = loadImage('Activated_prayer.png');
 	const iconData = loadImage(iconFile);
 
-	// Create SVG with layered images
 	let svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">`;
 
-	// Layer 0: Black background
 	svg += `<rect width="144" height="144" fill="#000000"/>`;
 
-	// Layer 1: Deactivated background (always shown)
 	if (deactivatedData) {
 		svg += `<image href="${deactivatedData}" x="0" y="0" width="144" height="144" image-rendering="pixelated"/>`;
 	}
 
-	// Layer 2: Activated glow (only when prayer is active)
 	if (isActive && activatedData) {
 		svg += `<image href="${activatedData}" x="0" y="0" width="144" height="144" image-rendering="pixelated"/>`;
 	}
 
-	// Layer 3: Prayer icon overlay - 30x30 scaled to 120x120 and centered
 	if (iconData) {
 		svg += `<image href="${iconData}" x="12" y="12" width="120" height="120" image-rendering="pixelated"/>`;
 	}
 
 	svg += `</svg>`;
 
-	// Convert SVG to data URI
 	const svgBase64 = Buffer.from(svg).toString('base64');
 	return `data:image/svg+xml;base64,${svgBase64}`;
-}
-
-/**
- * Prayer Button action
- */
-@action({ UUID: "com.catagris.runelite.prayerbutton" })
-export class PrayerButton extends SingletonAction<PrayerButtonSettings> {
-	/**
-	 * Called when the action becomes visible on the Stream Deck
-	 */
-	override async onWillAppear(ev: WillAppearEvent<PrayerButtonSettings>): Promise<void> {
-		const settings = ev.payload.settings;
-		let needsUpdate = false;
-
-		if (!settings.serverUrl) {
-			settings.serverUrl = "http://localhost:8085/state";
-			needsUpdate = true;
-		}
-		if (!settings.pollInterval) {
-			settings.pollInterval = 200;
-			needsUpdate = true;
-		}
-		if (!settings.prayerName) {
-			settings.prayerName = "protect_from_melee";
-			needsUpdate = true;
-		}
-
-		if (needsUpdate) {
-			await ev.action.setSettings(settings);
-		}
-
-		// Update cached server URL
-		cachedServerUrl = settings.serverUrl;
-
-		// Check if this is the first button BEFORE incrementing
-		const isFirstButton = activeButtonCount === 0;
-
-		// Store the action instance with its settings
-		activeButtons.set(ev.action.id, {
-			action: ev.action,
-			settings: settings
-		});
-
-		// Increment button count
-		activeButtonCount++;
-
-		// Set initial image (inactive state)
-		const image = createPrayerImage(settings.prayerName, false);
-		await ev.action.setImage(image);
-
-		// Start polling if this is the first button
-		if (isFirstButton) {
-			startPolling(settings.pollInterval);
-		} else {
-			// If polling is already running, immediately update this button
-			updatePrayerButtons();
-		}
-	}
-
-	/**
-	 * Called when the action is removed from the Stream Deck
-	 */
-	override async onWillDisappear(ev: WillDisappearEvent<PrayerButtonSettings>): Promise<void> {
-		// Remove the action instance
-		activeButtons.delete(ev.action.id);
-
-		// Decrement button count
-		activeButtonCount--;
-
-		// Stop polling if no buttons are active
-		if (activeButtonCount === 0) {
-			stopPolling();
-		}
-	}
-
-	/**
-	 * Called when settings are updated via property inspector
-	 */
-	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<PrayerButtonSettings>): Promise<void> {
-		const settings = ev.payload.settings;
-
-		// Update cached server URL if changed
-		if (settings.serverUrl) {
-			cachedServerUrl = settings.serverUrl;
-		}
-
-		// Update the stored settings for this button
-		const buttonData = activeButtons.get(ev.action.id);
-		if (buttonData) {
-			buttonData.settings = settings;
-		}
-
-		// Immediately update to reflect new settings
-		updatePrayerButtons();
-
-		// Update poll interval if changed
-		if (settings.pollInterval && pollingInterval) {
-			stopPolling();
-			startPolling(settings.pollInterval);
-		}
-	}
-}
-
-/**
- * Starts the polling interval
- */
-function startPolling(interval: number): void {
-	if (pollingInterval) {
-		return;
-	}
-
-	pollingInterval = setInterval(() => {
-		updatePrayerButtons();
-	}, interval);
-
-	// Immediately update on start
-	updatePrayerButtons();
-}
-
-/**
- * Stops the polling interval
- */
-function stopPolling(): void {
-	if (pollingInterval) {
-		clearInterval(pollingInterval);
-		pollingInterval = null;
-	}
 }
 
 /**
@@ -255,94 +107,91 @@ function stopPolling(): void {
 const lastButtonStates = new Map<string, { isActive: boolean; prayerName: string }>();
 
 /**
- * Updates all prayer buttons by fetching the current state from RuneLite
+ * State listener function
  */
-async function updatePrayerButtons(): Promise<void> {
-	if (activeButtons.size === 0) {
-		return;
+function onStateUpdate(state: RuneLiteState): void {
+	updatePrayerButtons(state);
+}
+
+/**
+ * Prayer Button action
+ */
+@action({ UUID: "com.catagris.runelite.prayerbutton" })
+export class PrayerButton extends SingletonAction<PrayerButtonSettings> {
+	override async onWillAppear(ev: WillAppearEvent<PrayerButtonSettings>): Promise<void> {
+		const settings = ev.payload.settings;
+
+		if (!settings.prayerName) {
+			settings.prayerName = "protect_from_melee";
+			await ev.action.setSettings(settings);
+		}
+
+		// Register listener if first button
+		if (activeButtons.size === 0) {
+			addStateListener(onStateUpdate);
+		}
+
+		activeButtons.set(ev.action.id, {
+			action: ev.action,
+			settings: settings
+		});
+
+		// Set initial image (inactive state)
+		const image = createPrayerImage(settings.prayerName, false);
+		await ev.action.setImage(image);
+
+		// Immediately render with current state
+		updatePrayerButtons(getState());
 	}
 
-	const controller = new AbortController();
-	const timeoutId = setTimeout(() => controller.abort(), 1000);
+	override async onWillDisappear(ev: WillDisappearEvent<PrayerButtonSettings>): Promise<void> {
+		activeButtons.delete(ev.action.id);
+		lastButtonStates.delete(ev.action.id);
 
-	try {
-		const response = await fetch(cachedServerUrl, { signal: controller.signal });
-		clearTimeout(timeoutId);
+		if (activeButtons.size === 0) {
+			removeStateListener(onStateUpdate);
+		}
+	}
 
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`);
+	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<PrayerButtonSettings>): Promise<void> {
+		const settings = ev.payload.settings;
+
+		const buttonData = activeButtons.get(ev.action.id);
+		if (buttonData) {
+			buttonData.settings = settings;
 		}
 
-		const data = await response.json() as RuneLiteState;
-
-		// Check if logged in (player field exists when logged in)
-		if (!data.player) {
-			// Not logged in - set all buttons to inactive state
-			await Promise.all(
-				Array.from(activeButtons.entries()).map(async ([id, buttonData]) => {
-					const prayerName = (buttonData.settings.prayerName || 'protect_from_melee').toLowerCase();
-					const lastState = lastButtonStates.get(id);
-					if (lastState?.isActive !== false || lastState?.prayerName !== prayerName) {
-						const image = createPrayerImage(prayerName, false);
-						await buttonData.action.setImage(image);
-						lastButtonStates.set(id, { isActive: false, prayerName });
-					}
-				})
-			);
-			return;
-		}
-
-		// Update all buttons based on whether their prayer is active
-		await Promise.all(
-			Array.from(activeButtons.entries()).map(async ([id, buttonData]) => {
-				const prayerName = (buttonData.settings.prayerName || 'protect_from_melee').toLowerCase();
-				const isActive = data.prayers?.[prayerName] === true;
-				const lastState = lastButtonStates.get(id);
-
-				// Only update image if state or prayer name changed
-				if (lastState?.isActive !== isActive || lastState?.prayerName !== prayerName) {
-					const image = createPrayerImage(prayerName, isActive);
-					await buttonData.action.setImage(image);
-					lastButtonStates.set(id, { isActive, prayerName });
-				}
-			})
-		);
-
-	} catch (error) {
-		clearTimeout(timeoutId);
-		// Connection error, timeout, or RuneLite is closed - set all to inactive
-		await Promise.all(
-			Array.from(activeButtons.entries()).map(async ([id, buttonData]) => {
-				const prayerName = (buttonData.settings.prayerName || 'protect_from_melee').toLowerCase();
-				const lastState = lastButtonStates.get(id);
-				if (lastState?.isActive !== false || lastState?.prayerName !== prayerName) {
-					const image = createPrayerImage(prayerName, false);
-					await buttonData.action.setImage(image);
-					lastButtonStates.set(id, { isActive: false, prayerName });
-				}
-			})
-		);
+		// Clear last state to force update with new prayer name
+		lastButtonStates.delete(ev.action.id);
+		updatePrayerButtons(getState());
 	}
 }
 
 /**
- * Settings for prayer buttons
+ * Updates all prayer buttons with current state
  */
-type PrayerButtonSettings = {
-	serverUrl?: string;
-	pollInterval?: number;
-	prayerName?: string;
-};
+async function updatePrayerButtons(state: RuneLiteState): Promise<void> {
+	if (activeButtons.size === 0) return;
 
-/**
- * RuneLite state response from the HTTP endpoint
- */
-type RuneLiteState = {
-	player?: {
-		name: string;
-		world: number;
-	};
-	prayers?: {
-		[key: string]: boolean;
-	};
+	// Check if we have any active prayers data
+	const activePrayers = state.activePrayers || [];
+
+	await Promise.all(
+		Array.from(activeButtons.entries()).map(async ([id, buttonData]) => {
+			const prayerName = (buttonData.settings.prayerName || 'protect_from_melee').toLowerCase();
+			const isActive = activePrayers.includes(prayerName);
+			const lastState = lastButtonStates.get(id);
+
+			// Only update image if state or prayer name changed
+			if (lastState?.isActive !== isActive || lastState?.prayerName !== prayerName) {
+				const image = createPrayerImage(prayerName, isActive);
+				await buttonData.action.setImage(image);
+				lastButtonStates.set(id, { isActive, prayerName });
+			}
+		})
+	);
+}
+
+type PrayerButtonSettings = {
+	prayerName?: string;
 };

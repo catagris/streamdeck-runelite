@@ -7,8 +7,13 @@ import { PrayerMeter } from "./actions/prayer-meter";
 import { SpecialAttackMeter } from "./actions/special-attack-meter";
 import { MapButton } from "./actions/map-button";
 import { PrayerButton } from "./actions/prayer-button";
+import { startServer } from "./state-server";
 
 console.log("[Plugin] Starting RuneLite Stream Deck Plugin");
+
+// Start the HTTP server to receive state from RuneLite
+startServer(8085);
+console.log("[Plugin] State server started on port 8085");
 
 // We can enable "trace" logging so that all messages between the Stream Deck, and the plugin are recorded. When storing sensitive information
 streamDeck.logger.setLevel("trace");

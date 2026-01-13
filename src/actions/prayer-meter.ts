@@ -1,16 +1,7 @@
 import { action, SingletonAction, WillAppearEvent, WillDisappearEvent, DidReceiveSettingsEvent } from "@elgato/streamdeck";
 import * as fs from 'fs';
 import * as path from 'path';
-
-/**
- * Tracks the number of prayer meter buttons currently visible
- */
-let activeButtonCount = 0;
-
-/**
- * Polling interval ID
- */
-let pollingInterval: NodeJS.Timeout | null = null;
+import { getState, addStateListener, removeStateListener, RuneLiteState } from '../state-server';
 
 /**
  * Map to store prayer meter button instances by context
@@ -18,12 +9,7 @@ let pollingInterval: NodeJS.Timeout | null = null;
 const activeButtons = new Map<string, any>();
 
 /**
- * Cached server URL to avoid repeated getSettings() calls
- */
-let cachedServerUrl = "http://localhost:8085/state";
-
-/**
- * Cached settings to avoid repeated getSettings() calls
+ * Cached settings per button
  */
 const cachedSettings = new Map<string, PrayerMeterSettings>();
 
@@ -85,7 +71,6 @@ function getOverlayImage(enabled: boolean): string {
 
 /**
  * Gets text color based on percentage (0-1)
- * Smooth gradient: Green (100%) -> Yellow (50%) -> Red (0%)
  */
 function getPercentColor(percent: number): string {
 	const pct = Math.max(0, Math.min(1, percent));
@@ -106,50 +91,107 @@ function getPercentColor(percent: number): string {
 }
 
 /**
+ * State listener function
+ */
+function onStateUpdate(state: RuneLiteState): void {
+	updatePrayerMeters(state);
+}
+
+/**
+ * Prayer Meter Button action
+ */
+@action({ UUID: "com.catagris.runelite.prayermeter" })
+export class PrayerMeter extends SingletonAction<PrayerMeterSettings> {
+	override async onWillAppear(ev: WillAppearEvent<PrayerMeterSettings>): Promise<void> {
+		const settings = ev.payload.settings;
+
+		if (settings.coloredNumbers === undefined) {
+			settings.coloredNumbers = false;
+		}
+		if (settings.showNumbers === undefined) {
+			settings.showNumbers = true;
+		}
+
+		await ev.action.setSettings(settings);
+
+		// Register listener if first button
+		if (activeButtons.size === 0) {
+			addStateListener(onStateUpdate);
+		}
+
+		activeButtons.set(ev.action.id, ev.action);
+		cachedSettings.set(ev.action.id, settings);
+
+		// Immediately render with current state
+		updatePrayerMeters(getState());
+	}
+
+	override async onWillDisappear(ev: WillDisappearEvent<PrayerMeterSettings>): Promise<void> {
+		activeButtons.delete(ev.action.id);
+		cachedSettings.delete(ev.action.id);
+
+		if (activeButtons.size === 0) {
+			removeStateListener(onStateUpdate);
+		}
+	}
+
+	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<PrayerMeterSettings>): Promise<void> {
+		const settings = ev.payload.settings;
+		cachedSettings.set(ev.action.id, settings);
+		updatePrayerMeters(getState());
+	}
+}
+
+/**
+ * Updates all prayer meter buttons with current state
+ */
+async function updatePrayerMeters(state: RuneLiteState): Promise<void> {
+	if (activeButtons.size === 0) return;
+
+	await Promise.all(
+		Array.from(activeButtons.entries()).map(async ([id, action]) => {
+			try {
+				const settings = cachedSettings.get(id) || {};
+				const image = createPrayerMeterImage(state, settings);
+				await action.setImage(image);
+			} catch (error) {
+				console.log(`[PrayerMeter] Error updating button ${id}:`, error);
+			}
+		})
+	);
+}
+
+/**
  * Creates an image with the prayer meter visualization
- * Layers: black background -> fill PNG -> black mask (from top) -> overlay PNG -> text
  */
 function createPrayerMeterImage(data: RuneLiteState, settings: PrayerMeterSettings): string {
-	// Get prayer data
 	const currentPrayer = data.stats?.prayer?.current || 0;
 	const maxPrayer = data.stats?.prayer?.max || 1;
-	const quickPrayerActive = data.prayers?.quickPrayerActive || false;
+	const quickPrayerActive = (data.activePrayers && data.activePrayers.length > 0) || false;
 
-	// Calculate percentage
 	const prayerPercent = maxPrayer > 0 ? currentPrayer / maxPrayer : 0;
-
-	// Determine text color based on settings
 	const textColor = settings.coloredNumbers === true ? getPercentColor(prayerPercent) : '#FFFFFF';
-
-	// Calculate mask height (from top - covers the drained portion)
 	const maskHeight = Math.round(144 * (1 - prayerPercent));
 
-	// Get appropriate images based on quick prayer state
 	const backgroundData = getBackgroundImage(quickPrayerActive);
 	const overlayData = getOverlayImage(quickPrayerActive);
 
-	// Create SVG with layered approach
 	let svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">`;
 
-	// Layer 1: Black background
 	svg += `<rect width="144" height="144" fill="#000000"/>`;
 
-	// Layer 2: Fill image (shows the full colored fill)
 	if (backgroundData) {
 		svg += `<image href="${backgroundData}" x="0" y="0" width="144" height="144"/>`;
 	}
 
-	// Layer 3: Black mask from top (covers drained portion)
 	if (maskHeight > 0) {
 		svg += `<rect x="0" y="0" width="144" height="${maskHeight}" fill="#000000"/>`;
 	}
 
-	// Layer 4: Overlay (frame with prayer icon)
 	if (overlayData) {
 		svg += `<image href="${overlayData}" x="0" y="0" width="144" height="144"/>`;
 	}
 
-	// Layer 5: Prayer text (with black stroke for readability)
 	if (settings.showNumbers !== false) {
 		const textPos = getTextPosition(settings.textPosition);
 		svg += `<text x="${textPos.x}" y="${textPos.y}" font-family="Arial" font-size="36" font-weight="bold" text-anchor="middle" dominant-baseline="middle" stroke="#000000" stroke-width="3" fill="none">${currentPrayer}</text>`;
@@ -158,181 +200,12 @@ function createPrayerMeterImage(data: RuneLiteState, settings: PrayerMeterSettin
 
 	svg += `</svg>`;
 
-	// Convert SVG to data URI
 	const svgBase64 = Buffer.from(svg).toString('base64');
 	return `data:image/svg+xml;base64,${svgBase64}`;
 }
 
-/**
- * Prayer Meter Button action
- */
-@action({ UUID: "com.catagris.runelite.prayermeter" })
-export class PrayerMeter extends SingletonAction<PrayerMeterSettings> {
-	/**
-	 * Called when the action becomes visible on the Stream Deck
-	 */
-	override async onWillAppear(ev: WillAppearEvent<PrayerMeterSettings>): Promise<void> {
-		const settings = ev.payload.settings;
-
-		let needsUpdate = false;
-		if (!settings.serverUrl) {
-			settings.serverUrl = "http://localhost:8085/state";
-			needsUpdate = true;
-		}
-		if (!settings.pollInterval) {
-			settings.pollInterval = 200;
-			needsUpdate = true;
-		}
-		if (settings.coloredNumbers === undefined) {
-			settings.coloredNumbers = false;
-			needsUpdate = true;
-		}
-
-		if (needsUpdate) {
-			await ev.action.setSettings(settings);
-		}
-
-		// Update cached server URL
-		cachedServerUrl = settings.serverUrl;
-
-		// Check if this is the first button BEFORE incrementing
-		const isFirstButton = activeButtonCount === 0;
-
-		// Store the action instance
-		activeButtons.set(ev.action.id, ev.action);
-
-		// Cache settings
-		cachedSettings.set(ev.action.id, settings);
-
-		// Increment button count
-		activeButtonCount++;
-
-		// Start polling if this is the first button
-		if (isFirstButton) {
-			startPolling(settings.pollInterval);
-		} else {
-			// If polling is already running, immediately update this button
-			updatePrayerMeters();
-		}
-	}
-
-	/**
-	 * Called when the action is removed from the Stream Deck
-	 */
-	override async onWillDisappear(ev: WillDisappearEvent<PrayerMeterSettings>): Promise<void> {
-		// Remove the action instance
-		activeButtons.delete(ev.action.id);
-
-		// Remove cached settings
-		cachedSettings.delete(ev.action.id);
-
-		// Decrement button count
-		activeButtonCount--;
-
-		// Stop polling if no buttons are active
-		if (activeButtonCount === 0) {
-			stopPolling();
-		}
-	}
-
-	/**
-	 * Called when settings are updated via property inspector
-	 */
-	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<PrayerMeterSettings>): Promise<void> {
-		const settings = ev.payload.settings;
-
-		// Update cached server URL if changed
-		if (settings.serverUrl) {
-			cachedServerUrl = settings.serverUrl;
-		}
-
-		// Update cached settings
-		cachedSettings.set(ev.action.id, settings);
-
-		// Immediately update to reflect new settings
-		updatePrayerMeters();
-
-		// Update poll interval if changed
-		if (settings.pollInterval && pollingInterval) {
-			stopPolling();
-			startPolling(settings.pollInterval);
-		}
-	}
-}
-
-/**
- * Starts the polling interval
- */
-function startPolling(interval: number): void {
-	if (pollingInterval) {
-		return;
-	}
-
-	pollingInterval = setInterval(() => {
-		updatePrayerMeters();
-	}, interval);
-
-	// Immediately update on start
-	updatePrayerMeters();
-}
-
-/**
- * Stops the polling interval
- */
-function stopPolling(): void {
-	if (pollingInterval) {
-		clearInterval(pollingInterval);
-		pollingInterval = null;
-	}
-}
-
-/**
- * Updates all prayer meter buttons by fetching the current state from RuneLite
- */
-async function updatePrayerMeters(): Promise<void> {
-	if (activeButtons.size === 0) {
-		return;
-	}
-
-	const controller = new AbortController();
-	const timeoutId = setTimeout(() => controller.abort(), 1000);
-
-	try {
-		const response = await fetch(cachedServerUrl, { signal: controller.signal });
-		clearTimeout(timeoutId);
-
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`);
-		}
-
-		const data = await response.json() as RuneLiteState;
-
-		// Update all prayer meter buttons in parallel
-		await Promise.all(
-			Array.from(activeButtons.entries()).map(async ([id, action]) => {
-				try {
-					const settings = cachedSettings.get(id) || {};
-					const image = createPrayerMeterImage(data, settings);
-					await action.setImage(image);
-				} catch (error) {
-					console.log(`[PrayerMeter] Error updating button ${id}:`, error);
-				}
-			})
-		);
-
-	} catch (error) {
-		clearTimeout(timeoutId);
-	}
-}
-
-/**
- * Text position options
- */
 type TextPosition = 'top-left' | 'top' | 'top-right' | 'left' | 'middle' | 'right' | 'bottom-left' | 'bottom' | 'bottom-right';
 
-/**
- * Gets the x,y coordinates for text based on position setting
- */
 function getTextPosition(position: TextPosition | undefined): { x: number; y: number } {
 	switch (position) {
 		case 'top-left':     return { x: 40, y: 40 };
@@ -348,40 +221,8 @@ function getTextPosition(position: TextPosition | undefined): { x: number; y: nu
 	}
 }
 
-/**
- * Settings for prayer meter buttons
- */
 type PrayerMeterSettings = {
-	serverUrl?: string;
-	pollInterval?: number;
 	coloredNumbers?: boolean;
 	textPosition?: TextPosition;
 	showNumbers?: boolean;
-};
-
-/**
- * RuneLite state response from the HTTP endpoint
- */
-type RuneLiteState = {
-	player?: {
-		name: string;
-		world: number;
-	};
-	stats?: {
-		hp?: {
-			current: number;
-			max: number;
-			status?: string;
-		};
-		prayer?: {
-			current: number;
-			max: number;
-		};
-		runEnergy?: number;
-		runEnabled?: boolean;
-		specialAttack?: number;
-	};
-	prayers?: {
-		quickPrayerActive?: boolean;
-	};
 };

@@ -2,26 +2,12 @@ import { action, SingletonAction, WillAppearEvent, WillDisappearEvent, KeyDownEv
 import { Hardware } from "keysender";
 import * as fs from 'fs';
 import * as path from 'path';
-
-/**
- * Tracks the number of tab buttons currently visible
- */
-let activeButtonCount = 0;
-
-/**
- * Polling interval ID
- */
-let pollingInterval: NodeJS.Timeout | null = null;
+import { getState, addStateListener, removeStateListener, RuneLiteState } from '../state-server';
 
 /**
  * Map to store tab button instances by context
  */
 const activeButtons = new Map<string, { action: any; settings: TabSettings }>();
-
-/**
- * Cached server URL to avoid repeated getSettings() calls
- */
-let cachedServerUrl = "http://localhost:8085/state";
 
 /**
  * Cached images as base64 data URI
@@ -95,24 +81,32 @@ function createTabImage(tabName: string, isActive: boolean): string {
 	const backgroundData = loadImage(backgroundFile);
 	const iconData = loadImage(iconFile);
 
-	// Create SVG with layered images
 	let svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">`;
 
-	// Layer 1: Background (active or inactive)
 	if (backgroundData) {
 		svg += `<image href="${backgroundData}" x="0" y="0" width="144" height="144"/>`;
 	}
 
-	// Layer 2: Tab icon overlay
 	if (iconData) {
 		svg += `<image href="${iconData}" x="0" y="0" width="144" height="144"/>`;
 	}
 
 	svg += `</svg>`;
 
-	// Convert SVG to data URI
 	const svgBase64 = Buffer.from(svg).toString('base64');
 	return `data:image/svg+xml;base64,${svgBase64}`;
+}
+
+/**
+ * Last known states for each button to avoid unnecessary image updates
+ */
+const lastButtonStates = new Map<string, { isActive: boolean; tabName: string }>();
+
+/**
+ * State listener function
+ */
+function onStateUpdate(state: RuneLiteState): void {
+	updateTabButtons(state);
 }
 
 /**
@@ -120,22 +114,10 @@ function createTabImage(tabName: string, isActive: boolean): string {
  */
 @action({ UUID: "com.catagris.runelite.tab" })
 export class TabButton extends SingletonAction<TabSettings> {
-	/**
-	 * Called when the action becomes visible on the Stream Deck
-	 */
 	override async onWillAppear(ev: WillAppearEvent<TabSettings>): Promise<void> {
-		// Set default settings if not present
 		const settings = ev.payload.settings;
 		let needsUpdate = false;
 
-		if (!settings.serverUrl) {
-			settings.serverUrl = "http://localhost:8085/state";
-			needsUpdate = true;
-		}
-		if (!settings.pollInterval) {
-			settings.pollInterval = 200;
-			needsUpdate = true;
-		}
 		if (!settings.tabName) {
 			settings.tabName = "inventory";
 			needsUpdate = true;
@@ -149,89 +131,52 @@ export class TabButton extends SingletonAction<TabSettings> {
 			await ev.action.setSettings(settings);
 		}
 
-		// Update cached server URL
-		cachedServerUrl = settings.serverUrl;
+		// Register listener if first button
+		if (activeButtons.size === 0) {
+			addStateListener(onStateUpdate);
+		}
 
-		// Check if this is the first button BEFORE incrementing
-		const isFirstButton = activeButtonCount === 0;
-
-		// Store the action instance with its settings
 		activeButtons.set(ev.action.id, {
 			action: ev.action,
 			settings: settings
 		});
 
-		// Increment button count
-		activeButtonCount++;
-
 		// Set initial image (inactive state)
 		const image = createTabImage(settings.tabName, false);
 		await ev.action.setImage(image);
 
-		// Start polling if this is the first button
-		if (isFirstButton) {
-			startPolling(settings.pollInterval);
-		} else {
-			// If polling is already running, immediately update this button
-			updateTabButtons();
-		}
+		// Immediately render with current state
+		updateTabButtons(getState());
 	}
 
-	/**
-	 * Called when the action is removed from the Stream Deck
-	 */
 	override async onWillDisappear(ev: WillDisappearEvent<TabSettings>): Promise<void> {
-		// Remove the action instance
 		activeButtons.delete(ev.action.id);
+		lastButtonStates.delete(ev.action.id);
 
-		// Decrement button count
-		activeButtonCount--;
-
-		// Stop polling if no buttons are active
-		if (activeButtonCount === 0) {
-			stopPolling();
+		if (activeButtons.size === 0) {
+			removeStateListener(onStateUpdate);
 		}
 	}
 
-	/**
-	 * Called when settings are updated via property inspector
-	 */
 	override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<TabSettings>): Promise<void> {
 		const settings = ev.payload.settings;
 
-		// Update cached server URL if changed
-		if (settings.serverUrl) {
-			cachedServerUrl = settings.serverUrl;
-		}
-
-		// Update the stored settings for this button
 		const buttonData = activeButtons.get(ev.action.id);
 		if (buttonData) {
 			buttonData.settings = settings;
 		}
 
-		// Immediately update to reflect new settings
-		updateTabButtons();
-
-		// Update poll interval if changed
-		if (settings.pollInterval && pollingInterval) {
-			stopPolling();
-			startPolling(settings.pollInterval);
-		}
+		// Clear last state to force update with new tab name
+		lastButtonStates.delete(ev.action.id);
+		updateTabButtons(getState());
 	}
 
-	/**
-	 * Called when the button is pressed
-	 */
 	override async onKeyDown(ev: KeyDownEvent<TabSettings>): Promise<void> {
 		const settings = ev.payload.settings;
 		const keyToPress = (settings.keyToPress || "escape") as "f1" | "f2" | "f3" | "f4" | "f5" | "f6" | "f7" | "f8" | "f9" | "f10" | "f11" | "f12" | "escape";
 
 		try {
-			// Create hardware instance (null handle targets the foreground window)
 			const hardware = new Hardware(null);
-
-			// Send the key press - button state will be updated by polling
 			await hardware.keyboard.sendKey(keyToPress);
 		} catch (error) {
 			console.log('[TabButton] Error sending key:', error);
@@ -240,128 +185,30 @@ export class TabButton extends SingletonAction<TabSettings> {
 }
 
 /**
- * Starts the polling interval
+ * Updates all tab buttons with current state
  */
-function startPolling(interval: number): void {
-	if (pollingInterval) {
-		return; // Already polling
-	}
+async function updateTabButtons(state: RuneLiteState): Promise<void> {
+	if (activeButtons.size === 0) return;
 
-	pollingInterval = setInterval(() => {
-		updateTabButtons();
-	}, interval);
+	const activeTab = state.activeTab?.toLowerCase();
 
-	// Immediately update on start
-	updateTabButtons();
+	await Promise.all(
+		Array.from(activeButtons.entries()).map(async ([id, buttonData]) => {
+			const tabName = (buttonData.settings.tabName || 'inventory').toLowerCase();
+			const isActive = tabName === activeTab;
+			const lastState = lastButtonStates.get(id);
+
+			// Only update image if state or tab name changed
+			if (lastState?.isActive !== isActive || lastState?.tabName !== tabName) {
+				const image = createTabImage(tabName, isActive);
+				await buttonData.action.setImage(image);
+				lastButtonStates.set(id, { isActive, tabName });
+			}
+		})
+	);
 }
 
-/**
- * Stops the polling interval
- */
-function stopPolling(): void {
-	if (pollingInterval) {
-		clearInterval(pollingInterval);
-		pollingInterval = null;
-	}
-}
-
-/**
- * Last known states for each button to avoid unnecessary image updates
- * Stores: { isActive: boolean, tabName: string }
- */
-const lastButtonStates = new Map<string, { isActive: boolean; tabName: string }>();
-
-/**
- * Updates all tab buttons by fetching the current state from RuneLite
- */
-async function updateTabButtons(): Promise<void> {
-	if (activeButtons.size === 0) {
-		return;
-	}
-
-	const controller = new AbortController();
-	const timeoutId = setTimeout(() => controller.abort(), 1000); // 1 second timeout
-
-	try {
-		const response = await fetch(cachedServerUrl, { signal: controller.signal });
-		clearTimeout(timeoutId);
-
-		if (!response.ok) {
-			throw new Error(`HTTP error! status: ${response.status}`);
-		}
-
-		const data = await response.json() as RuneLiteState;
-
-		// Check if logged in (player field exists when logged in)
-		if (!data.player) {
-			// Not logged in - set all buttons to inactive state
-			await Promise.all(
-				Array.from(activeButtons.entries()).map(async ([id, buttonData]) => {
-					const tabName = (buttonData.settings.tabName || 'inventory').toLowerCase();
-					const lastState = lastButtonStates.get(id);
-					if (lastState?.isActive !== false || lastState?.tabName !== tabName) {
-						const image = createTabImage(tabName, false);
-						await buttonData.action.setImage(image);
-						lastButtonStates.set(id, { isActive: false, tabName });
-					}
-				})
-			);
-			return;
-		}
-
-		// Get the active tab
-		const activeTab = data.activeTab?.toLowerCase();
-
-		// Update all buttons based on whether they match the active tab
-		await Promise.all(
-			Array.from(activeButtons.entries()).map(async ([id, buttonData]) => {
-				const tabName = (buttonData.settings.tabName || 'inventory').toLowerCase();
-				const isActive = tabName === activeTab;
-				const lastState = lastButtonStates.get(id);
-
-				// Only update image if state or tab name changed
-				if (lastState?.isActive !== isActive || lastState?.tabName !== tabName) {
-					const image = createTabImage(tabName, isActive);
-					await buttonData.action.setImage(image);
-					lastButtonStates.set(id, { isActive, tabName });
-				}
-			})
-		);
-
-	} catch (error) {
-		clearTimeout(timeoutId);
-		// Connection error, timeout, or RuneLite is closed - set all to inactive
-		await Promise.all(
-			Array.from(activeButtons.entries()).map(async ([id, buttonData]) => {
-				const tabName = (buttonData.settings.tabName || 'inventory').toLowerCase();
-				const lastState = lastButtonStates.get(id);
-				if (lastState?.isActive !== false || lastState?.tabName !== tabName) {
-					const image = createTabImage(tabName, false);
-					await buttonData.action.setImage(image);
-					lastButtonStates.set(id, { isActive: false, tabName });
-				}
-			})
-		);
-	}
-}
-
-/**
- * Settings for tab buttons
- */
 type TabSettings = {
-	serverUrl?: string;
-	pollInterval?: number;
 	tabName?: string;
 	keyToPress?: string;
-};
-
-/**
- * RuneLite state response from the HTTP endpoint
- */
-type RuneLiteState = {
-	player?: {
-		name: string;
-		world: number;
-	};
-	activeTab?: string;
 };
