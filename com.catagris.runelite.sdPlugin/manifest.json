@@ -1,7 +1,8 @@
 {
-	"Name": "runelite",
+	"Name": "Streamdeck-Runelite",
 	"Version": "0.1.0.0",
 	"Author": "Catagris",
+	"URL": "https://github.com/catagris/streamdeck-runelite",
 	"Actions": [
 		{
 			"Name": "Tab Button",
@@ -129,17 +130,13 @@
 	"Category": "runelite",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
-	"Description": "Interact with Runelite through the streamdeck plugin",
+	"Description": "Display real-time OSRS stats (health, prayer, run energy, special attack) and control game interface tabs through RuneLite integration.",
 	"Icon": "imgs/plugin/marketplace",
 	"SDKVersion": 3,
 	"Software": {
 		"MinimumVersion": "6.9"
 	},
 	"OS": [
-		{
-			"Platform": "mac",
-			"MinimumVersion": "12"
-		},
 		{
 			"Platform": "windows",
 			"MinimumVersion": "10"
